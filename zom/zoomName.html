@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Join Meeting</title>
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box;font-family:'Poppins',sans-serif;}
+body{
+  display:flex;justify-content:center;align-items:center;
+  min-height:100vh;
+  background: linear-gradient(135deg,#6A11CB,#2575FC);
+  color:#fff;
+}
+.join-container{
+  width:90%;max-width:400px;
+  padding:40px;
+  background: rgba(255,255,255,0.05);
+  backdrop-filter: blur(15px);
+  border-radius:20px;
+  text-align:center;
+  box-shadow:0 8px 25px rgba(0,0,0,0.5);
+  animation: fadeIn 1s ease-in-out;
+}
+@keyframes fadeIn{0%{opacity:0;transform:translateY(-20px);}100%{opacity:1;transform:translateY(0);}}
+h1{font-size:2.2rem;margin-bottom:1.5rem;}
+img{width:120px;margin-bottom:1rem;}
+input{
+  width:100%;padding:12px;margin-top:10px;border-radius:12px;border:none;
+  background: rgba(255,255,255,0.1); color:#fff; outline:none; font-size:1rem; transition:0.3s;
+}
+input:focus{background: rgba(255,255,255,0.2);}
+button{
+  width:100%;padding:12px;margin-top:15px;border:none;border-radius:12px;
+  background:#fff;color:#6A11CB;font-weight:700;font-size:1rem;cursor:pointer;transition:0.3s;
+}
+button:hover{background:#e0e0e0;}
+
+/* Responsive */
+@media(max-width:500px){
+  .join-container{padding:30px;}
+  h1{font-size:1.8rem;}
+  input, button{font-size:0.95rem;padding:10px;}
+}
+</style>
+</head>
+<body>
+<div class="join-container">
+  <h1>ZOOM</h1>
+  <img src="user.png" alt="User Icon">
+  <input id="username" type="text" placeholder="Your name">
+  <button onclick="joinMeeting()">Join Meeting</button>
+</div>
+
+<script>
+function joinMeeting(){
+  let name=document.getElementById("username").value.trim();
+  if(!name){alert("Enter your name");return;}
+  localStorage.setItem("username",name);
+  window.location.href="zoom.html";
+}
+</script>
+</body>
+</html>
