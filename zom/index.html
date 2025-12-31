@@ -3,14 +3,19 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Zoom Meeting</title>
+<title>Zoom Collaboration</title>
+
 <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700&display=swap" rel="stylesheet">
+
+<script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/simple-peer@9/simplepeer.min.js"></script>
+
 <style>
 *{margin:0;padding:0;box-sizing:border-box;font-family:'Poppins',sans-serif;}
 body{background:#121212;color:white;display:flex;flex-direction:column;align-items:center;min-height:100vh;}
 h2{margin:10px;font-size:1.8rem;color:#fff;text-shadow:0 0 8px #6A11CB;text-align:center;}
 #timer{margin-bottom:8px;font-size:1rem;}
-#videos{display:flex;flex-wrap:wrap;gap:10px;width:95%;max-width:600px;}
+#videos{display:flex;flex-wrap:wrap;gap:10px;width:95%;max-width:600px;justify-content:center;}
 video{width:200px;height:150px;border-radius:15px;background:black;box-shadow:0 0 20px #6A11CB;}
 .panel{width:90%;max-width:600px;background:rgba(255,255,255,0.05);backdrop-filter:blur(10px);margin-top:10px;padding:12px;border-radius:15px;box-shadow:0 0 15px rgba(0,0,0,0.5);}
 #chatBox{height:100px;overflow-y:auto;background:rgba(0,0,0,0.2);padding:8px;border-radius:10px;}
@@ -30,6 +35,7 @@ footer{position:fixed;bottom:0;width:100%;background:rgba(255,255,255,0.05);back
 }
 </style>
 </head>
+
 <body>
 
 <h2 id="titleName">ZOOM</h2>
@@ -40,7 +46,7 @@ footer{position:fixed;bottom:0;width:100%;background:rgba(255,255,255,0.05);back
 <div class="panel">
 <h3>Chat</h3>
 <div id="chatBox"></div>
-<input id="chatInput" placeholder="Type message..." onkeydown="if(event.key==='Enter') sendMessage()">
+<input id="chatInput" placeholder="Type message..." />
 </div>
 
 <div class="panel">
@@ -52,182 +58,122 @@ footer{position:fixed;bottom:0;width:100%;background:rgba(255,255,255,0.05);back
 <div class="controls">
 <button onclick="toggleCamera()">📷</button>
 <button onclick="toggleMic()">🎤</button>
-<button onclick="switchCam()">🔄</button>
 <button onclick="shareScreen()">🖥️</button>
 <button onclick="leave()">❌</button>
-<button onclick="toggleTheme()">🌙</button>
 </div>
 </footer>
 
-<script src="server.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/simple-peer@9/simplepeer.min.js"></script>
 <script>
-let cameraOn=true,micOn=true,usingFront=true,localStream,timerSeconds=0;
-let user=localStorage.getItem("username")||prompt("Enter your name")||"Guest";
-document.getElementById("titleName").innerText="Welcome, "+user;
-
-const socket = io();
+const socket = io(); // connects to Render server
 const peers = {};
-const videosDiv = document.getElementById('videos');
-const participantsList = document.getElementById('participants');
-const chatBox = document.getElementById('chatBox');
-const chatInput = document.getElementById('chatInput');
+let localStream;
+let camOn = true;
+let micOn = true;
 
-socket.emit('join', user);
+const videos = document.getElementById("videos");
+const chatBox = document.getElementById("chatBox");
+const chatInput = document.getElementById("chatInput");
+const participantsList = document.getElementById("participants");
+
+const user = localStorage.getItem("username") || prompt("Enter your name") || "Guest";
+localStorage.setItem("username", user);
+document.getElementById("titleName").innerText = "Welcome, " + user;
+
+socket.emit("join", user);
 
 // Timer
-setInterval(()=>{
-    timerSeconds++;
-    let h=String(Math.floor(timerSeconds/3600)).padStart(2,'0');
-    let m=String(Math.floor((timerSeconds%3600)/60)).padStart(2,'0');
-    let s=String(timerSeconds%60).padStart(2,'0');
-    document.getElementById("timer").innerText=`${h}:${m}:${s}`;
-},1000);
+let seconds = 0;
+setInterval(() => {
+  seconds++;
+  const h = String(Math.floor(seconds / 3600)).padStart(2,"0");
+  const m = String(Math.floor((seconds % 3600) / 60)).padStart(2,"0");
+  const s = String(seconds % 60).padStart(2,"0");
+  document.getElementById("timer").innerText = `${h}:${m}:${s}`;
+}, 1000);
 
-// Start local camera
-async function startCamera(){
-    localStream = await navigator.mediaDevices.getUserMedia({video:{facingMode:usingFront?"user":"environment"},audio:true});
-    addVideo(localStream, user);
-}
-startCamera();
-
-// Controls
-function toggleCamera(){cameraOn=!cameraOn; if(localStream) localStream.getVideoTracks()[0].enabled=cameraOn;}
-function toggleMic(){micOn=!micOn; if(localStream) localStream.getAudioTracks()[0].enabled=micOn;}
-async function switchCam(){usingFront=!usingFront;if(localStream) localStream.getTracks().forEach(t=>t.stop()); await startCamera();}
-async function shareScreen(){ 
-    if(navigator.mediaDevices.getDisplayMedia){
-        let scr=await navigator.mediaDevices.getDisplayMedia({video:true});
-        addVideo(scr, 'Screen');
-        for(let id in peers){
-            const sender = peers[id].streams[0].getVideoTracks()[0];
-            sender.replaceTrack(scr.getVideoTracks()[0]);
-        }
-        scr.getVideoTracks()[0].onended = ()=> {
-            for(let id in peers){
-                const sender = peers[id].streams[0].getVideoTracks()[0];
-                sender.replaceTrack(localStream.getVideoTracks()[0]);
-            }
-        };
-    }
-}
-
-function sendMessage(){
-    let msg=chatInput.value.trim();
-    if(!msg) return;
-    chatBox.innerHTML+=`<div><b>${user}:</b> ${msg}</div>`;
-    chatInput.value="";
-    chatBox.scrollTop=chatBox.scrollHeight;
-    socket.emit('message', msg);
-}
-
-function leave(){window.location.href="home.html";}
-function toggleTheme(){document.body.style.background=document.body.style.background=="white"?"#121212":"white";document.body.style.color=document.body.style.color=="black"?"white":"black";}
-
-// Helper to add video element
-function addVideo(stream,label){
-    const video=document.createElement('video');
-    video.srcObject=stream;
-    video.autoplay=true;
-    video.playsInline=true;
-    video.setAttribute('data-label',label);
-    videosDiv.appendChild(video);
-}
-
-// Socket.io multi-user logic
-socket.on('participants', participants=>{
-    participantsList.innerHTML="";
-    for(let id in participants){
-        const li = document.createElement('li');
-        li.textContent = participants[id]+(id===socket.id?" (You)":"");
-        participantsList.appendChild(li);
-        if(id!==socket.id && !peers[id]){
-            const peer = new SimplePeer({initiator:true,trickle:false,stream:localStream});
-            peer.on('signal', signal=>socket.emit('signal',{to:id,signal}));
-            peer.on('stream', remoteStream=>addVideo(remoteStream, participants[id]));
-            peers[id]=peer;
-        }
-    }
+// Camera
+navigator.mediaDevices.getUserMedia({video:true,audio:true})
+.then(stream=>{
+  localStream = stream;
+  addVideo(stream);
 });
-socket.on('signal', data => {
-        if(peers[data.from]){
-            peers[data.from].signal(data.signal);
-        } else {
-            // Create peer as responder
-            const peer = new SimplePeer({ initiator:false, trickle:false, stream:localStream });
-            peer.on('signal', signal => socket.emit('signal', { to:data.from, signal }));
-            peer.on('stream', remoteStream => addVideo(remoteStream, 'Peer'));
-            peer.signal(data.signal);
-            peers[data.from] = peer;
-        }
-    });
-
-    socket.on('message', msg => {
-        chatBox.innerHTML += `<div><b>${msg.from}:</b> ${msg.text}</div>`;
-        chatBox.scrollTop = chatBox.scrollHeight;
-    });
-
 
 // Chat
-chatInput.addEventListener('keydown', e => {
-    if(e.key==='Enter' && chatInput.value.trim()!==''){
-        socket.emit('message', chatInput.value);
-        chatInput.value='';
-    }
+chatInput.addEventListener("keydown", e => {
+  if(e.key === "Enter" && chatInput.value.trim()){
+    socket.emit("message", chatInput.value);
+    chatInput.value = "";
+  }
 });
 
-// Video element
-function addVideo(stream, label){
-    const video = document.createElement('video');
-    video.srcObject = stream;
-    video.autoplay = true;
-    video.playsInline = true;
-    video.setAttribute('data-label', label);
-    videos.appendChild(video);
+socket.on("message", msg=>{
+  chatBox.innerHTML += `<div><b>${msg.from}:</b> ${msg.text}</div>`;
+  chatBox.scrollTop = chatBox.scrollHeight;
+});
+
+// Participants & WebRTC
+socket.on("participants", users=>{
+  participantsList.innerHTML = "";
+  for(const id in users){
+    const li = document.createElement("li");
+    li.textContent = users[id] + (id === socket.id ? " (You)" : "");
+    participantsList.appendChild(li);
+
+    if(id !== socket.id && !peers[id]){
+      const peer = new SimplePeer({initiator:true,trickle:false,stream:localStream});
+      peer.on("signal", s => socket.emit("signal",{to:id,signal:s}));
+      peer.on("stream", s => addVideo(s));
+      peers[id] = peer;
+    }
+  }
+});
+
+socket.on("signal", data=>{
+  if(!peers[data.from]){
+    const peer = new SimplePeer({initiator:false,trickle:false,stream:localStream});
+    peer.on("signal", s => socket.emit("signal",{to:data.from,signal:s}));
+    peer.on("stream", s => addVideo(s));
+    peer.signal(data.signal);
+    peers[data.from] = peer;
+  } else {
+    peers[data.from].signal(data.signal);
+  }
+});
+
+// Helpers
+function addVideo(stream){
+  const v = document.createElement("video");
+  v.srcObject = stream;
+  v.autoplay = true;
+  v.playsInline = true;
+  videos.appendChild(v);
 }
 
-// Controls
-toggleCamBtn.addEventListener('click', () => {
-    if(localStream){
-        camOn = !camOn;
-        localStream.getVideoTracks()[0].enabled = camOn;
-    }
-});
+function toggleCamera(){
+  camOn = !camOn;
+  localStream.getVideoTracks()[0].enabled = camOn;
+}
 
-toggleMicBtn.addEventListener('click', () => {
-    if(localStream){
-        micOn = !micOn;
-        localStream.getAudioTracks()[0].enabled = micOn;
-    }
-});
+function toggleMic(){
+  micOn = !micOn;
+  localStream.getAudioTracks()[0].enabled = micOn;
+}
 
-shareScreenBtn.addEventListener('click', async () => {
-    if(navigator.mediaDevices.getDisplayMedia){
-        try{
-            const screenStream = await navigator.mediaDevices.getDisplayMedia({video:true});
-            const screenTrack = screenStream.getVideoTracks()[0];
+async function shareScreen(){
+  const screen = await navigator.mediaDevices.getDisplayMedia({video:true});
+  for(const id in peers){
+    peers[id].replaceTrack(
+      localStream.getVideoTracks()[0],
+      screen.getVideoTracks()[0],
+      localStream
+    );
+  }
+}
 
-            // Replace local video track for all peers
-            for(let id in peers){
-                const sender = peers[id].streams[0].getVideoTracks()[0];
-                sender.replaceTrack(screenTrack);
-            }
-
-            addVideo(screenStream, 'Screen');
-
-            screenTrack.onended = () => {
-                for(let id in peers){
-                    const sender = peers[id].streams[0].getVideoTracks()[0];
-                    sender.replaceTrack(localStream.getVideoTracks()[0]);
-                }
-            }
-        } catch(e){
-            console.log("Screen share failed:", e);
-        }
-    }
-});
+function leave(){
+  window.location.reload();
+}
 </script>
 
 </body>
-
 </html>
